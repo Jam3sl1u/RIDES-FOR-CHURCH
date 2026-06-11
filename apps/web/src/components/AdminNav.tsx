@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 
+// page links
 const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/members", label: "Members" },
