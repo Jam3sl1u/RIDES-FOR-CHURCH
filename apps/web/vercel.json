@@ -1,4 +1,4 @@
 {
-  "installCommand": "cd ../.. && npm install && npm run db:generate",
+  "installCommand": "pwd && ls ../.. && node -v && npm -v && cd ../.. && npm install && npm run db:generate",
   "buildCommand": "cd ../.. && npm run build --workspace apps/web"
 }
