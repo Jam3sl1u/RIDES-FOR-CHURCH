@@ -1,0 +1,113 @@
+// Church Rides — Prisma schema (Postgres on Neon; mirrors local Docker Postgres in dev)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Pickup locations in priority routing order:
+/// Mesa → UTC → Midway → PV1 → PV2 → Vdcn → Camino → VDC
+enum PickupLocation {
+  Mesa
+  UTC
+  Midway
+  PV1
+  PV2
+  Vdcn
+  Camino
+  VDC
+}
+
+enum RideRequestStatus {
+  PENDING
+  ASSIGNED
+  UNASSIGNED // no seat available this week
+  CANCELLED
+}
+
+model Church {
+  id                    String  @id @default(cuid())
+  name                  String
+  discordServerId       String  @unique @map("discord_server_id")
+  signupChannelId       String  @map("signup_channel_id")
+  weeklyChannelId       String  @map("weekly_channel_id")
+  weeklyMessageTemplate String  @default("🚗 Who needs a ride this Sunday? React with ✅ to sign up!") @map("weekly_message_template")
+  /// 0 = Sunday … 6 = Saturday (default Friday)
+  weeklySendDay         Int     @default(5) @map("weekly_send_day")
+  /// 24h "HH:mm" local server time (default 6:00 PM)
+  weeklySendTime        String  @default("18:00") @map("weekly_send_time")
+  /// Message ID of the most recent weekly ride post (so the bot can resume watching reactions after a restart)
+  activeWeeklyMessageId String? @map("active_weekly_message_id")
+
+  members Member[]
+  drivers Driver[]
+
+  @@map("churches")
+}
+
+model Member {
+  id              String         @id @default(cuid())
+  discordId       String         @unique @map("discord_id")
+  discordUsername String         @map("discord_username")
+  fullName        String         @map("full_name")
+  phoneNumber     String         @map("phone_number")
+  pickupLocation  PickupLocation @map("pickup_location")
+  preferences     String?
+  churchId        String         @map("church_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  church          Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  rideRequests    RideRequest[]
+  rideAssignments RideAssignment[]
+
+  @@map("members")
+}
+
+model Driver {
+  id                  String         @id @default(cuid())
+  fullName            String         @map("full_name")
+  phoneNumber         String         @map("phone_number")
+  email               String?
+  discordId           String?        @map("discord_id")
+  pickupZone          PickupLocation @map("pickup_zone")
+  seatsAvailable      Int            @default(4) @map("seats_available")
+  isAvailableThisWeek Boolean        @default(true) @map("is_available_this_week")
+  churchId            String         @map("church_id")
+
+  church          Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  rideAssignments RideAssignment[]
+
+  @@map("drivers")
+}
+
+model RideRequest {
+  id       String            @id @default(cuid())
+  memberId String            @map("member_id")
+  weekDate DateTime          @map("week_date") @db.Date
+  status   RideRequestStatus @default(PENDING)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, weekDate])
+  @@index([weekDate])
+  @@map("ride_requests")
+}
+
+model RideAssignment {
+  id       String   @id @default(cuid())
+  driverId String   @map("driver_id")
+  memberId String   @map("member_id")
+  weekDate DateTime @map("week_date") @db.Date
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, weekDate])
+  @@index([weekDate])
+  @@index([driverId, weekDate])
+  @@map("ride_assignments")
+}
